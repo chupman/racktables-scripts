@@ -48,7 +48,7 @@ def CreateObj(vmname, args):
     url = args.api + addobj + type + objname
 
 
-def AddTags(vmname, id, taglist args):
+def AddTags(vmname, id, taglist, args):
     addtags = "method=update_object_tag"
     object_id = "&object_id=" + id
     tags = "&taglist=" + taglist
@@ -78,18 +78,20 @@ def GetDiff(vmdata, rtdata, args):
     # Get vm names of systems already in racktables
     rtlist = []
     vmlist = []
+    rtdict = {}
     for id, val in rtdata["response"].iteritems():
-        # print(val["name"])
-        rtlist.append(val["name"])  # add names into a list
-
+        name = val["name"]
+        rtlist.append(name)  # add names into a list
+        rtdict[name] = {}
+        rtdict[name]["parent_type_id"] = val["container_objtype_id"]
+        rtdict[name]["cluster"] = val["container_name"]
+        rtdict[name]["tags"] = val["itags"]
+        rtdict[name]["project"] = val["etags"]  # nested by project tag ids with info nested
+        rtdict[name]["ips"] = val["ipv4"]
+        rtdict[name]["id"] = val["id"]
     # Get vm names of
     for vmname, attrs in vmdata.iteritems():
-        # print(vmname)
         vmlist.append(vmname)  # add vm names into a list
-        vmobj = vmdata[vmname]
-        # print(vmobj)
-        # CreateObj(vmobj, vmname, args)
-        # CreateEntityLink(vmobj, vmname)
 
     match = set(vmlist).intersection(rtlist)  # VMs that exist in both systems
     diff = set(vmlist).difference(rtlist)  # VMs that need to be added
@@ -101,6 +103,7 @@ def GetDiff(vmdata, rtdata, args):
         print(list(diff))
     for vmname in list(diff):
         CreateObj(vmname, args)
+    pprint.pprint(rtdict)
 
 
 def main():
