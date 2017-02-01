@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """
+getVMsWithPlacement.py
 Written by Chris Hupman
 Github: https://github.com/chupman/
 Example: Get guest info with folder and host placement
@@ -37,7 +38,7 @@ def GetArgs():
     parser.add_argument('--json', required=False, action='store_true',
                         help='Write out to json file')
     parser.add_argument('--jsonfile', required=False, action='store',
-                        default='getvmsbycluster.json',
+                        default='getVMsWithPlacement.json',
                         help='Filename and path of json file')
     parser.add_argument('--silent', required=False, action='store_true',
                         help='supress output to screen')
@@ -80,15 +81,18 @@ def vmsummary(summary, guest):
 def vm2dict(dc, cluster, host, vm, summary):
     # If nested folder path is required, split into a separate function
     vmname = vm.summary.config.name
-    data[dc][cluster][host][vmname]['folder'] = vm.parent.name
-    data[dc][cluster][host][vmname]['mem'] = summary['mem']
-    data[dc][cluster][host][vmname]['diskGB'] = summary['diskGB']
-    data[dc][cluster][host][vmname]['cpu'] = summary['cpu']
-    data[dc][cluster][host][vmname]['path'] = summary['path']
-    data[dc][cluster][host][vmname]['net'] = summary['net']
-    data[dc][cluster][host][vmname]['ostype'] = summary['ostype']
-    data[dc][cluster][host][vmname]['state'] = summary['state']
-    data[dc][cluster][host][vmname]['annotation'] = summary['annotation']
+    data[vmname]['folder'] = vm.parent.name
+    data[vmname]['mem'] = summary['mem']
+    data[vmname]['diskGB'] = summary['diskGB']
+    data[vmname]['cpu'] = summary['cpu']
+    data[vmname]['path'] = summary['path']
+    data[vmname]['net'] = summary['net']
+    data[vmname]['ostype'] = summary['ostype']
+    data[vmname]['state'] = summary['state']
+    data[vmname]['annotation'] = summary['annotation']
+    data[vmname]['dc'] = dc
+    data[vmname]['cluster'] = cluster
+    data[vmname]['host'] = host
 
 
 def data2json(data, args):
@@ -124,20 +128,15 @@ def main():
     children = content.rootFolder.childEntity
     for child in children:  # Iterate though DataCenters
         dc = child
-        data[dc.name] = {}  # Add data Centers to data dict
         clusters = dc.hostFolder.childEntity
         for cluster in clusters:  # Iterate through the clusters in the DC
-            # Add Clusters to data dict
-            data[dc.name][cluster.name] = {}
             hosts = cluster.host  # Variable to make pep8 compliance
             for host in hosts:  # Iterate through Hosts in the Cluster
                 hostname = host.summary.config.name
-                # Add VMs to data dict by config name
-                data[dc.name][cluster.name][hostname] = {}
                 vms = host.vm
                 for vm in vms:  # Iterate through each VM on the host
                     vmname = vm.summary.config.name
-                    data[dc.name][cluster.name][hostname][vmname] = {}
+                    data[vmname] = {}
                     summary = vmsummary(vm.summary, vm.guest)
                     vm2dict(dc.name, cluster.name, hostname, vm, summary)
 

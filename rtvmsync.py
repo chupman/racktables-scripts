@@ -25,6 +25,9 @@ def GetArgs():
                         help='Remote host to connect to')
     parser.add_argument('-u', '--user', required=False, action='store',
                         help='User name to use when connecting to host')
+    parser.add_argument('-a', '--api', required=False, action='store',
+                        default="http://clp.svl.ibm.com/racktables/api.php?",
+                        help='User name to use when connecting to host')
     parser.add_argument('-p', '--password', required=False, action='store',
                         help='Password to use when connecting to host')
     parser.add_argument('--silent', required=False, action='store_true',
@@ -32,23 +35,42 @@ def GetArgs():
     parser.add_argument('-t', '--test', required=False, action='store_true',
                         help='Display differences without updating racktables')
     parser.add_argument('--jsonfile', required=False, action='store',
-                        default='getvmsbycluster.json',
+                        default='getVMsWithPlacement.json',
                         help='Filename and path of vmdata file')
     args = parser.parse_args()
     return args
 
 
-def CreateObj(vm, vmname):
-    pass
+def CreateObj(vmname, args):
+    addobj = "method=add_object"
+    type = "&object_type_id=1504"
+    objname = "&object_name=" + vmname
+    url = args.api + addobj + type + objname
 
-def CreateEntityLink(vm, vmname):
-    pass
+
+def AddTags(vmname, id, taglist args):
+    addtags = "method=update_object_tag"
+    object_id = "&object_id=" + id
+    tags = "&taglist=" + taglist
+    url = args.api + addtags + object_id + tags
+
+
+def AddContainer(vmname, id, cluster_id, args):
+    addcontainer = "method=link_entities"
+    chtype = "&child_entity_type=object"
+    chid = "&child_entity_id=" + id
+    partype = "&parent_entity_type=object"
+    parid = "&parent_entity_id=" + cluster_id
+    url = args.api + addcontainer + chtype + chid + partype + parid
 
 
 def GetRTData(args):
-    res = requests.get("http://clp.svl.ibm.com/racktables/api.php?method=get_depot&andor=and&cft%5B%5D=15&cfe=%7B%24typeid_1504%7D&include_attrs=1", auth=HTTPBasicAuth(args.user, args.password))
+    # Connect to racktables and return requested data as json
+    depot = "method=get_depot"
+    exp = "&andor=and&cft%5B%5D=15&cfe=%7B%24typeid_1504%7D&include_attrs=1"
+    url = args.api + depot + exp
+    res = requests.get(url, auth=HTTPBasicAuth(args.user, args.password))
     rtdata = res.json()
-    #pprint.pprint(rtdata["response"])
     return rtdata
 
 
@@ -57,30 +79,28 @@ def GetDiff(vmdata, rtdata, args):
     rtlist = []
     vmlist = []
     for id, val in rtdata["response"].iteritems():
-        print(val["name"])
-        rtlist.append(val["name"]) # add names into a list
-
+        # print(val["name"])
+        rtlist.append(val["name"])  # add names into a list
 
     # Get vm names of
-    dc = vmdata["Top Gun"]
-    for cluster, hosts in dc.iteritems():    
-        cluster = vmdata["Top Gun"][cluster]
-        for host, vms in cluster.iteritems():
-            for vmname, attr in vms.iteritems():
-                #print(vmname)
-                vmlist.append(vmname)  #add vm names into a list
-                vmobj = cluster[host][vmname]
-                #print(vmobj)
-                #CreateObj(vmobj, vmname)
-                #CreateEntityLink(vmobj, vmname)
+    for vmname, attrs in vmdata.iteritems():
+        # print(vmname)
+        vmlist.append(vmname)  # add vm names into a list
+        vmobj = vmdata[vmname]
+        # print(vmobj)
+        # CreateObj(vmobj, vmname, args)
+        # CreateEntityLink(vmobj, vmname)
 
     match = set(vmlist).intersection(rtlist)  # VMs that exist in both systems
     diff = set(vmlist).difference(rtlist)  # VMs that need to be added
 
-    print("Match:")
-    print(match)
-    print("Diff:")
-    print(diff)
+    if not args.silent:
+        print("Match:")
+        print(list(match))
+        print("Diff:")
+        print(list(diff))
+    for vmname in list(diff):
+        CreateObj(vmname, args)
 
 
 def main():
