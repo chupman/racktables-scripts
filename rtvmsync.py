@@ -83,6 +83,22 @@ def addContainer(id, cluster_id, args):
         print("Added Container successfully")
 
 
+def addIP(id, ipaddr, interface, args):
+    addip = "method=add_object_ip_allocation"
+    objid = "&object_id=" + id
+    ip = "&ip=" + ipaddr
+    veth = "&bond_name=" + interface
+    bondtype = "&bond_type=regular"
+    url = args.api + addip + objid + ip + veth + bondtype
+    print(url)
+    res = requests.get(url, auth=HTTPBasicAuth(args.user, args.password))
+    code = res.status_code
+    print(code)
+    print(res.text)
+    if code == 200:
+        print("Added IP successfully")
+
+
 def getRTData(args):
     # Connect to racktables and return requested data as json
     depot = "method=get_depot"
@@ -110,7 +126,6 @@ def getDiff(vmdata, rtdata, args):
         eth = 0
         rtdict[name]["ips"] = {}
         for ipbin, v in val["ipv4"].iteritems():
-            # pprint.pprint(val["ipv4"][ipbin])
             addr = val["ipv4"][ipbin]["addrinfo"]["ip"]
             rtdict[name]["ips"][eth] = {"ip": addr}
             eth += 1
@@ -177,7 +192,6 @@ def main():
         vmdata = json.load(json_file)
 
     rtdata = getRTData(args)
-    pprint.pprint(rtdata)
     exit
     projectTags = getProjectTags(args)
     clusterDict = getClusterList(args)
@@ -206,9 +220,14 @@ def main():
         # TODO If the wrong cluster association is present delete it
         if  rtdict[vm]["cluster"] == '':
             addContainer(id, cluster_id, args)
+        eth = 0
         if rtdict[vm]["ips"] == {}:
-            #addIPs()
-            pass
+            for mac, v in vmdata[vm]["net"].iteritems():
+                if 'ip' in vmdata[vm]["net"][mac]:
+                    ip = vmdata[vm]["net"][mac]["ip"]
+                veth = "veth" + str(eth)
+                addIP(id, ip, veth, args) # add 1 IP at a a time
+                eth += 1
 # Start program
 if __name__ == "__main__":
     main()
