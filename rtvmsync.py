@@ -50,26 +50,35 @@ def createObj(vmname, args):
     code = res.status_code
     if code == 200:
         print("Created object " + vmname + " successfully")
-    # objret = res
-    # return objret
 
 
-def addTags(id, taglist, args):
-    addtags = "method=update_object_tag"
+def addTags(id, tagid, args):
+    # TODO add check to see if tag is already on the vm
+    addtags = "method=update_object_tags"
     object_id = "&object_id=" + id
-    tags = "&taglist=" + taglist
+    tags = "&taglist[]=" + tagid
     url = args.api + addtags + object_id + tags
+    print(url)
+    res = requests.get(url, auth=HTTPBasicAuth(args.user, args.password))
+    code = res.status_code
+    print(code)
+    print(res.text)
+    if code == 200:
+        print("Added Tag: " + tagid + " successfully")
 
 
 def addContainer(id, cluster_id, args):
+    # TODO add check to see if container is already on the vm
     addcontainer = "method=link_entities"
     chtype = "&child_entity_type=object"
     chid = "&child_entity_id=" + id
     partype = "&parent_entity_type=object"
     parid = "&parent_entity_id=" + cluster_id
-    url = args.api + addcontainer + chtype + chid + partype + parid
+    url = args.api + addcontainer + chid + parid + chtype + partype
+    print(url)
     res = requests.get(url, auth=HTTPBasicAuth(args.user, args.password))
     code = res.status_code
+    print(code)
     if code == 200:
         print("Added Container successfully")
 
@@ -77,7 +86,8 @@ def addContainer(id, cluster_id, args):
 def getRTData(args):
     # Connect to racktables and return requested data as json
     depot = "method=get_depot"
-    exp = "&andor=and&cft%5B%5D=15&cfe=%7B%24typeid_1504%7D&include_attrs=1"
+    #exp = "&andor=and&cft%5B%5D=15&cfe=%7B%24typeid_1504%7D&include_attrs=1"
+    exp = "&andor=and&cfe=%7B%24typeid_1504%7D&include_attrs=1"
     url = args.api + depot + exp
     res = requests.get(url, auth=HTTPBasicAuth(args.user, args.password))
     rtdata = res.json()
@@ -113,30 +123,26 @@ def getDiff(vmdata, rtdata, args):
     match = set(vmlist).intersection(rtlist)  # VMs that exist in both systems
     diff = set(vmlist).difference(rtlist)  # VMs that need to be added
 
-    for vmname in list(diff):
-        createObj(vmname, args)
-    # pprint.pprint(rtdict)
     return diff, match, rtdict
-
-
-def getClusterIDs(cluster, clusterlist):
-    pass
 
 
 def getProjectTags(args):
     # depot = "method=get_depot"
     # exp = "&andor=and&cft%5B%5D=15"
-    taglist = "method=get_taglist"
+    gettaglist = "method=get_taglist"
     # url = args.api + depot + exp
-    url = args.api + taglist
+    url = args.api + gettaglist
     res = requests.get(url, auth=HTTPBasicAuth(args.user, args.password))
     tagtree = res.json()
     projectTags = {}
     # Iterate through returned json and restructure data
     for k, v in tagtree["response"].iteritems():
         # Only populate if it's under the projects tag umbrella
-        if tagtree["response"][k]["trace"]["0"] == "15":
-            projectName = tagtree["response"][k]["tags"]
+        trace = tagtree["response"][k]["trace"]
+        if "0" in trace:
+            trace0 = tagtree["response"][k]["trace"]["0"]
+        if "0" in trace and trace["0"] == "15":
+            projectName = tagtree["response"][k]["tag"]
             projectID = tagtree["response"][k]["id"]
             projectTags[projectName] = projectID
     return projectTags
@@ -153,7 +159,7 @@ def getClusterList(args):
     for k, v in clusters["response"].iteritems():
         clusterName = clusters["response"][k]["name"]
         id = clusters["response"][k]["id"]
-        clusterDict[clustername] = id
+        clusterDict[clusterName] = id
     return clusterDict
 
 
@@ -171,25 +177,38 @@ def main():
         vmdata = json.load(json_file)
 
     rtdata = getRTData(args)
+    pprint.pprint(rtdata)
+    exit
     projectTags = getProjectTags(args)
-    pprint.pprint(tagtree)
     clusterDict = getClusterList(args)
-    pprint.pprint(clusterlist)
     diff, match, rtdict = getDiff(vmdata, rtdata, args)
-
     if not args.silent:
-        print("Match:")
+        print("Match:" + str(len(list(match))) + "Systems in match list")
         print(list(match))
-        print("Diff:")
+        print("Diff:" + str(len(list(diff))) + "Systems in diff list" )
         print(list(diff))
-    for vm in diff:
-        taglist = []
-        id = rtdict[vm]["id"]
-        taglist.appent(projectTags[vmdata[vm]["folder"]])
-        cluster_id = clusterDict[vmdata[vm]["cluster"]]
-        print(taglist)
-        addTags(id, taglist, args)
-        addContainer(id, cluster_id, args)
+    if diff is not []:
+        for vmname in list(diff):
+            createObj(vmname, args)
+        rtdata = getRTData(args) # Rerun to get IDs on newly created VMs
+        diff, match, rtdict = getDiff(vmdata, rtdata, args)
+
+    for vm in match:
+        print(vm)
+        id = rtdict[vm]["id"]  # Get racktables object id of VM
+        tagid = projectTags[vmdata[vm]["folder"]]  # Get tagid of project
+        cluster_id = clusterDict[vmdata[vm]["cluster"]]  # Get Cluster id
+        # Check for project association in RT and add if abscent
+        # TODO If the wrong project association is present delete it
+        if  rtdict[vm]["tags"] == {}:
+            addTags(id, tagid, args)
+        # Check for Cluster association in RT and add if abscent
+        # TODO If the wrong cluster association is present delete it
+        if  rtdict[vm]["cluster"] == '':
+            addContainer(id, cluster_id, args)
+        if rtdict[vm]["ips"] == {}:
+            #addIPs()
+            pass
 # Start program
 if __name__ == "__main__":
     main()
