@@ -6,13 +6,13 @@ Example: take pyvmomi output and sync racktables objects.
 
 """
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import argparse
 import getpass
 import json
 import requests
 from requests.auth import HTTPBasicAuth
-import pprint
 
 
 def getArgs():
@@ -102,7 +102,6 @@ def addIP(id, ipaddr, interface, args):
 def getRTData(args):
     # Connect to racktables and return requested data as json
     depot = "method=get_depot"
-    #exp = "&andor=and&cft%5B%5D=15&cfe=%7B%24typeid_1504%7D&include_attrs=1"
     exp = "&andor=and&cfe=%7B%24typeid_1504%7D&include_attrs=1"
     url = args.api + depot + exp
     res = requests.get(url, auth=HTTPBasicAuth(args.user, args.password))
@@ -197,28 +196,27 @@ def main():
     clusterDict = getClusterList(args)
     diff, match, rtdict = getDiff(vmdata, rtdata, args)
     if not args.silent:
-        print("Match:" + str(len(list(match))) + "Systems in match list")
-        print(list(match))
-        print("Diff:" + str(len(list(diff))) + "Systems in diff list" )
-        print(list(diff))
+        print("There are " + str(len(list(match))) + " systems in match list:")
+        print(', '.join(match))  # print set with a list like appearance
+        print("There are " + str(len(list(diff))) + " systems in diff list:")
+        print(', '.join(diff))
     if diff is not []:
         for vmname in list(diff):
             createObj(vmname, args)
-        rtdata = getRTData(args) # Rerun to get IDs on newly created VMs
+        rtdata = getRTData(args)  # Rerun to get IDs on newly created VMs
         diff, match, rtdict = getDiff(vmdata, rtdata, args)
 
     for vm in match:
-        print(vm)
         id = rtdict[vm]["id"]  # Get racktables object id of VM
         tagid = projectTags[vmdata[vm]["folder"]]  # Get tagid of project
         cluster_id = clusterDict[vmdata[vm]["cluster"]]  # Get Cluster id
         # Check for project association in RT and add if abscent
         # TODO If the wrong project association is present delete it
-        if  rtdict[vm]["tags"] == {}:
+        if rtdict[vm]["tags"] == {}:
             addTags(id, tagid, args)
         # Check for Cluster association in RT and add if abscent
         # TODO If the wrong cluster association is present delete it
-        if  rtdict[vm]["cluster"] == '':
+        if rtdict[vm]["cluster"] == '':
             addContainer(id, cluster_id, args)
         eth = 0
         if rtdict[vm]["ips"] == {}:
@@ -226,7 +224,7 @@ def main():
                 if 'ip' in vmdata[vm]["net"][mac]:
                     ip = vmdata[vm]["net"][mac]["ip"]
                 veth = "veth" + str(eth)
-                addIP(id, ip, veth, args) # add 1 IP at a a time
+                addIP(id, ip, veth, args)  # add 1 IP at a a time
                 eth += 1
 # Start program
 if __name__ == "__main__":
