@@ -67,6 +67,22 @@ def addTags(id, tagid, args):
         print("Added Tag: " + tagid + " successfully")
 
 
+def deleteContainer(id, cluster_id, args):
+    # TODO add check to see if container is already on the vm
+    rmcontainer = "method=unlink_entities"
+    chtype = "&child_entity_type=object"
+    chid = "&child_entity_id=" + id
+    partype = "&parent_entity_type=object"
+    parid = "&parent_entity_id=" + cluster_id
+    url = args.api + rmcontainer + chid + parid + chtype + partype
+    print(url)
+    res = requests.get(url, auth=HTTPBasicAuth(args.user, args.password))
+    code = res.status_code
+    print(code)
+    if code == 200:
+        print("Removed Container successfully")
+
+
 def addContainer(id, cluster_id, args):
     # TODO add check to see if container is already on the vm
     addcontainer = "method=link_entities"
@@ -82,6 +98,17 @@ def addContainer(id, cluster_id, args):
     if code == 200:
         print("Added Container successfully")
 
+
+def deleteIP(id, ip, args):
+    rmip = "method=delete_object_ip_allocation"
+    objid = "&object_id=" + id
+    objip = "&ip=" + ip
+    url = args.api + rmip + objid + objip
+    res = requests.get(url, auth=HTTPBasicAuth(args.user, args.password))
+    code = res.status_code
+    print(code)
+    if code == 200:
+        print("IP removed successfully")
 
 def addIP(id, ipaddr, interface, args):
     addip = "method=add_object_ip_allocation"
@@ -129,7 +156,6 @@ def getDiff(vmdata, rtdata, args):
             rtdict[name]["ips"][eth] = {"ip": addr}
             eth += 1
         rtdict[name]["id"] = val["id"]
-    # Get vm names of
     for vmname, attrs in vmdata.iteritems():
         if attrs["state"] == "poweredOn":  # Only add powered on VMs
             vmlist.append(vmname)  # Add vm names into a list
@@ -141,10 +167,7 @@ def getDiff(vmdata, rtdata, args):
 
 
 def getProjectTags(args):
-    # depot = "method=get_depot"
-    # exp = "&andor=and&cft%5B%5D=15"
     gettaglist = "method=get_taglist"
-    # url = args.api + depot + exp
     url = args.api + gettaglist
     res = requests.get(url, auth=HTTPBasicAuth(args.user, args.password))
     tagtree = res.json()
@@ -174,6 +197,16 @@ def getClusterList(args):
         clusterName = clusters["response"][k]["name"]
         id = clusters["response"][k]["id"]
         clusterDict[clusterName] = id
+    # Do a separate call for project IDs as well
+    exp = "&andor=and&cfe=%7B%24typeid_50039%7D"
+    url = args.api + depot + exp
+    res = requests.get(url, auth=HTTPBasicAuth(args.user, args.password))
+    clusters = res.json()
+    for k, v in clusters["response"].iteritems():
+        clusterName = clusters["response"][k]["name"]
+        id = clusters["response"][k]["id"]
+        clusterDict[clusterName] = id
+
     return clusterDict
 
 
@@ -211,13 +244,22 @@ def main():
         tagid = projectTags[vmdata[vm]["folder"]]  # Get tagid of project
         cluster_id = clusterDict[vmdata[vm]["cluster"]]  # Get Cluster id
         # Check for project association in RT and add if abscent
+        # TODO Add check to see if project tag exists and create if needed.
         # TODO If the wrong project association is present delete it
         if rtdict[vm]["tags"] == {}:
             addTags(id, tagid, args)
         # Check for Cluster association in RT and add if abscent
         # TODO If the wrong cluster association is present delete it
-        if rtdict[vm]["cluster"] == '':
+        if rtdict[vm]["cluster"] == vmdata[vm]["cluster"]:
+            pass
+        elif rtdict[vm]["cluster"] == '':
             addContainer(id, cluster_id, args)
+        elif rtdict[vm]["cluster"] != vmdata[vm]["cluster"]:
+            old_cluster_id = clusterDict[rtdict[vm]["cluster"]]
+            deleteContainer(id, old_cluster_id, args)
+            addContainer(id, cluster_id, args)
+        else:
+            pass
         eth = 0
         if rtdict[vm]["ips"] == {}:
             for mac, v in vmdata[vm]["net"].iteritems():
